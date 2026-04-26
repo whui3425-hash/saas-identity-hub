@@ -1,0 +1,77 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// 1. 租户表（SaaS 的核心：所有数据必须归属于某个租户）
+model Tenant {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  domain      String?  @unique // 支持自定义域名
+  createdAt   DateTime @default(now())
+  users       User[]
+  roles       Role[]
+}
+
+// 2. 用户表
+model User {
+  id        String   @id @default(uuid())
+  username  String
+  email     String   @unique
+  password  String   // 存储 bcrypt 加密后的密文
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  roles     UserRole[] // 用户与角色的多对多关联
+  createdAt DateTime @default(now())
+
+  @@index([tenantId]) // 关键索引：加速租户下的用户查询
+}
+
+// 3. 角色表（支持租户自定义角色）
+model Role {
+  id          String   @id @default(uuid())
+  name        String   // 如：管理员, 编辑, 普通用户
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@unique([name, tenantId]) // 同一租户下角色名唯一
+}
+
+// 4. 权限表（系统预设的权限点）
+model Permission {
+  id          String   @id @default(uuid())
+  action      String   @unique // 如：user:create, order:view
+  description String?
+  roles       RolePermission[]
+}
+
+// 5. 角色与权限的关联表（多对多）
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+// 6. 用户与角色的关联表（多对多）
+model UserRole {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
