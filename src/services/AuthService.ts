@@ -12,6 +12,48 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 export class AuthService {
+    async register(tenantName: string, email: string, password: string) {
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        try {
+            const result = await prisma.$transaction(async (tx) => {
+                const tenant = await tx.tenant.create({
+                    data: {
+                        name: tenantName
+                    }
+                });
+
+                const user = await tx.user.create({
+                    data: {
+                        username: email.split('@')[0] || 'admin',
+                        email,
+                        password: hashedPassword,
+                        tenantId: tenant.id
+                    }
+                });
+
+                const { password: _, ...safeUser } = user;
+                return { tenant, user: safeUser };
+            });
+
+            return result;
+        } catch (err: any) {
+            if (err?.code === 'P2002') {
+                const targets = Array.isArray(err?.meta?.target) ? err.meta.target : [];
+
+                if (targets.includes('email')) {
+                    throw new Error('Email already exists');
+                }
+                if (targets.includes('name')) {
+                    throw new Error('Tenant name already exists');
+                }
+                throw new Error('Unique constraint conflict');
+            }
+
+            throw err;
+        }
+    }
+
     async login(email: string, pass: string) {
         const user = await prisma.user.findUnique({
             where: { email },
