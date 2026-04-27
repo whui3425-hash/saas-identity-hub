@@ -1,9 +1,15 @@
 // src/services/AuthService.ts
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../../generated/prisma/index.js';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-const prisma = new PrismaClient();
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL
+});
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
 export class AuthService {
     async login(email: string, pass: string) {
